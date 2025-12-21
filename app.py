@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import plotly.graph_objects as go
+import bcrypt
 from supabase import create_client, Client
 
 # ==========================================
@@ -9,30 +10,26 @@ from supabase import create_client, Client
 # ==========================================
 st.set_page_config(page_title="재현고 내신 등급컷 예측 시스템", page_icon="📈")
 
-# [수정] 에러 원인을 화면에 출력하는 디버깅 코드
 @st.cache_resource
 def init_supabase():
-    # 1. secrets.toml 파일 인식 확인
+    # 1. Secrets 설정 확인 (디버깅용)
     if "SUPABASE_URL" not in st.secrets:
-        st.error("❌ secrets.toml 파일에서 SUPABASE_URL을 찾을 수 없습니다.")
+        st.error("❌ Streamlit Cloud 설정(Secrets)에 SUPABASE_URL이 없습니다.")
         return None
     if "SUPABASE_KEY" not in st.secrets:
-        st.error("❌ secrets.toml 파일에서 SUPABASE_KEY를 찾을 수 없습니다.")
+        st.error("❌ Streamlit Cloud 설정(Secrets)에 SUPABASE_KEY가 없습니다.")
         return None
 
     try:
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        
-        # 2. 클라이언트 생성 시도
-        client = create_client(url, key)
-        return client
-        
+        return create_client(url, key)
     except Exception as e:
-        # 3. 진짜 에러 메시지 출력
         st.error(f"🔥 DB 연결 치명적 오류: {e}")
         return None
-# 과목 설정
+
+# [중요] 함수를 정의만 하면 안 되고, 이렇게 실행해서 변수에 담아야 합니다!
+supabase = init_supabase()# 과목 설정
 SUBJECT_CONFIG = {
     "국어(1학년)": {"obj": 24, "sub": 6}, "영어(1학년)": {"obj": 22, "sub": 5}, "수학(1학년)": {"obj": 17, "sub": 5},
     "통합사회": {"obj": 24, "sub": 6}, "통합과학": {"obj": 22, "sub": 5}, "한국사": {"obj": 20, "sub": 8},
