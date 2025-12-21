@@ -9,17 +9,29 @@ from supabase import create_client, Client
 # ==========================================
 st.set_page_config(page_title="재현고 내신 등급컷 예측 시스템", page_icon="📈")
 
+# app.py 맨 윗부분 수정
+
 @st.cache_resource
 def init_supabase():
-    try:
-        if "SUPABASE_URL" in st.secrets and "SUPABASE_KEY" in st.secrets:
-            return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    # 1. 시크릿 키가 있는지부터 확인
+    if "SUPABASE_URL" not in st.secrets:
+        st.error("🚫 에러: Streamlit Cloud 설정(Secrets)에 SUPABASE_URL이 없습니다!")
         return None
-    except:
+    if "SUPABASE_KEY" not in st.secrets:
+        st.error("🚫 에러: Streamlit Cloud 설정(Secrets)에 SUPABASE_KEY가 없습니다!")
+        return None
+
+    # 2. 연결 시도
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        client = create_client(url, key)
+        return client
+    except Exception as e:
+        st.error(f"🔥 DB 연결 실패 (상세 사유): {e}")
         return None
 
 supabase = init_supabase()
-
 # 과목 데이터
 SUBJECT_CONFIG = {
     "국어(1학년)": {"obj": 24, "sub": 6}, "영어(1학년)": {"obj": 22, "sub": 5}, "수학(1학년)": {"obj": 17, "sub": 5},
