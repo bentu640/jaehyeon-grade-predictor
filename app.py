@@ -9,8 +9,6 @@ from supabase import create_client, Client
 # ==========================================
 st.set_page_config(page_title="재현고 내신 등급컷 예측 시스템", page_icon="📈")
 
-# app.py 맨 윗부분 수정
-
 @st.cache_resource
 def init_supabase():
     # 1. 시크릿 키가 있는지부터 확인
@@ -32,12 +30,14 @@ def init_supabase():
         return None
 
 supabase = init_supabase()
-# 과목 데이터
+
+# 과목 데이터 (기하 추가됨)
 SUBJECT_CONFIG = {
     "국어(1학년)": {"obj": 24, "sub": 6}, "영어(1학년)": {"obj": 22, "sub": 5}, "수학(1학년)": {"obj": 17, "sub": 5},
     "통합사회": {"obj": 24, "sub": 6}, "통합과학": {"obj": 22, "sub": 5}, "한국사": {"obj": 20, "sub": 8},
     "대수": {"obj": 17, "sub": 5}, "미적분1": {"obj": 17, "sub": 5}, "확률과 통계": {"obj": 17, "sub": 5},
-    "수학과제탐구": {"obj": 17, "sub": 5}, "국어(2학년)": {"obj": 24, "sub": 6}, "영어(2학년)": {"obj": 22, "sub": 8},
+    "수학과제탐구": {"obj": 17, "sub": 5}, "기하": {"obj": 17, "sub": 5}, 
+    "국어(2학년)": {"obj": 24, "sub": 6}, "영어(2학년)": {"obj": 22, "sub": 8},
     "물리": {"obj": 20, "sub": 6}, "화학": {"obj": 20, "sub": 6}, "생물": {"obj": 20, "sub": 6}, "지구": {"obj": 20, "sub": 6},
     "사회문화": {"obj": 20, "sub": 8}, "윤리": {"obj": 25, "sub": 5}, "지리": {"obj": 20, "sub": 6}, "역사": {"obj": 20, "sub": 6},
     "중국어": {"obj": 28, "sub": 0}, "일본어": {"obj": 28, "sub": 0},
@@ -50,7 +50,7 @@ SUBJECT_CONFIG = {
 
 GRADE_SUBJECTS = {
     "1학년": ["국어(1학년)", "영어(1학년)", "수학(1학년)", "통합사회", "통합과학", "한국사"],
-    "2학년": ["대수", "미적분1", "확률과 통계", "수학과제탐구", "국어(2학년)", "영어(2학년)", "물리", "화학", "생물", "지구", "사회문화", "윤리", "지리", "역사", "중국어", "일본어"],
+    "2학년": ["대수", "미적분1", "확률과 통계", "수학과제탐구", "기하", "국어(2학년)", "영어(2학년)", "물리", "화학", "생물", "지구", "사회문화", "윤리", "지리", "역사", "중국어", "일본어"],
     "3학년": ["독서와 작문", "영어 독해와 작문", "전문 수학", "언어생활탐구", "경제수학", "미적분2", "심화 영어", "경제", "한국지리 탐구", "동아시아 역사 기행", "윤리와 사상", "전자기와 양자", "화학 반응의 세계", "생물의 유전", "행성우주과학"]
 }
 
@@ -201,7 +201,7 @@ if st.session_state.page == "login":
                         "last_confirmed_round": sys_conf["current_round"]
                     }).execute()
                     st.session_state.signup_step = 1
-                    st.success("가입 완료! 로그인하세요."); st.rerun()
+                    st.success("회원가입 성공! 로그인하세요."); st.rerun()
 
 # 2. 등급 강제 업데이트 페이지
 elif st.session_state.page == "update_grades":
@@ -269,40 +269,42 @@ elif st.session_state.page == "main":
             with st.form("adm_sub_form"):
                 d["active"] = act
                 d["homer_mode"] = hom
-                d["prev_avg"] = st.number_input("지난 평균", value=float(d["prev_avg"]))
+                d["prev_avg"] = st.number_input("지난 평균", value=float(d["prev_avg"]), step=0.1)
                 
                 if hom:
                     st.info("😈 호머 보정치 입력 (+점수)")
                     hc = st.columns(3)
-                    d["homer_adj"]["1"] = hc[0].number_input("1컷+", float(d["homer_adj"]["1"]))
-                    d["homer_adj"]["2"] = hc[1].number_input("2컷+", float(d["homer_adj"]["2"]))
-                    d["homer_adj"]["3"] = hc[2].number_input("3컷+", float(d["homer_adj"]["3"]))
+                    d["homer_adj"]["1"] = hc[0].number_input("1컷+", value=float(d["homer_adj"]["1"]), step=0.1)
+                    d["homer_adj"]["2"] = hc[1].number_input("2컷+", value=float(d["homer_adj"]["2"]), step=0.1)
+                    d["homer_adj"]["3"] = hc[2].number_input("3컷+", value=float(d["homer_adj"]["3"]), step=0.1)
                 
                 st.divider()
                 st.write("예측 기준 설정")
                 c = st.columns(3)
-                d["cut_weights"] = {"1": c[0].number_input("1W", float(d["cut_weights"]["1"])), "2": c[1].number_input("2W", float(d["cut_weights"]["2"])), "3": c[2].number_input("3W", float(d["cut_weights"]["3"]))}
+                d["cut_weights"] = {"1": c[0].number_input("1W", value=float(d["cut_weights"]["1"]), step=0.01), "2": c[1].number_input("2W", value=float(d["cut_weights"]["2"]), step=0.01), "3": c[2].number_input("3W", value=float(d["cut_weights"]["3"]), step=0.01)}
                 cc = st.columns(3)
-                d["prev_cuts"] = {"1": cc[0].number_input("전1컷", float(d["prev_cuts"]["1"])), "2": cc[1].number_input("전2컷", float(d["prev_cuts"]["2"])), "3": cc[2].number_input("전3컷", float(d["prev_cuts"]["3"]))}
+                d["prev_cuts"] = {"1": cc[0].number_input("전1컷", value=float(d["prev_cuts"]["1"]), step=0.1), "2": cc[1].number_input("전2컷", value=float(d["prev_cuts"]["2"]), step=0.1), "3": cc[2].number_input("전3컷", value=float(d["prev_cuts"]["3"]), step=0.1)}
                 
                 st.write("이번 시험 예상 평균 (5등급제)")
                 gc = st.columns(5)
-                for i in range(1, 6): d["dev_predict"][str(i)] = gc[i-1].number_input(f"{i}등급", float(d["dev_predict"][str(i)]))
+                for i in range(1, 6): d["dev_predict"][str(i)] = gc[i-1].number_input(f"{i}등급", value=float(d["dev_predict"][str(i)]), step=0.1)
                 
-                st.write("정답 및 배점")
+                st.write("정답 및 배점 (범위 제한 없음)")
                 for i in range(0, SUBJECT_CONFIG[sel_sub]["obj"], 4):
                     cols = st.columns(4)
                     for j in range(4):
                         idx = i+j
                         if idx < SUBJECT_CONFIG[sel_sub]["obj"]:
                             d["obj_answers"][idx] = cols[j].selectbox(f"Q{idx+1}", [1,2,3,4,5], index=d["obj_answers"][idx]-1, key=f"an_{idx}")
-                            d["obj_scores"][idx] = cols[j].number_input(f"Q{idx+1}점", 0.0, 10.0, float(d["obj_scores"][idx]), key=f"sc_{idx}")
+                            # 관리자 입력 제한 제거 (min_value, max_value 삭제)
+                            d["obj_scores"][idx] = cols[j].number_input(f"Q{idx+1}점", value=float(d["obj_scores"][idx]), step=0.1, key=f"sc_{idx}")
                 
                 if SUBJECT_CONFIG[sel_sub]["sub"] > 0:
-                    st.write("서술형 설정")
+                    st.write("서술형 설정 (범위 제한 없음)")
                     for k in range(SUBJECT_CONFIG[sel_sub]["sub"]):
                         d["sub_criteria"][k] = st.text_input(f"서술{k+1} 기준", d["sub_criteria"][k], key=f"cr_{k}")
-                        d["sub_max_scores"][k] = st.number_input(f"서술{k+1} 만점", float(d["sub_max_scores"][k]), key=f"sm_{k}")
+                        # 관리자 입력 제한 제거
+                        d["sub_max_scores"][k] = st.number_input(f"서술{k+1} 만점", value=float(d["sub_max_scores"][k]), step=0.1, key=f"sm_{k}")
                 
                 if st.form_submit_button("설정 저장"):
                     supabase.table("subject_settings").upsert({"subject": sel_sub, "round": cur_round, "settings": d}).execute()
