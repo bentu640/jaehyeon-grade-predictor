@@ -66,7 +66,6 @@ def get_subject_setting(sub, round_num):
         res = supabase.table("subject_settings").select("settings").eq("subject", sub).eq("round", round_num).execute()
         if res.data: 
             s = res.data[0]['settings']
-            # 데이터 호환성 보장
             if "term_mid_cuts" not in s: s["term_mid_cuts"] = {"1": 90.0, "2": 80.0, "3": 70.0}
             if "term_adj" not in s or isinstance(s["term_adj"], float):
                 s["term_adj"] = {"1": 0.0, "2": 0.0, "3": 0.0}
@@ -253,53 +252,53 @@ elif st.session_state.page == "main":
             act = c1.checkbox("채점 활성화", value=d["active"], key=f"act_{sel_sub}")
             hom = c2.checkbox("😈 호머 보정 켜기", value=d.get("homer_mode", False), key=f"hom_{sel_sub}")
             
-            # [중요] form key에 sel_sub를 넣어 과목별로 입력값을 분리함
+            # [수정] 관리자 입력 폼: 모든 number_input의 min/max 제한 제거 (value와 step만 사용)
             with st.form(f"admin_f_{sel_sub}"):
                 d["active"] = act
                 d["homer_mode"] = hom
-                d["prev_avg"] = st.number_input("지난 평균", value=float(d["prev_avg"]), key=f"pa_{sel_sub}")
+                d["prev_avg"] = st.number_input("지난 평균", value=float(d["prev_avg"]), step=0.1, key=f"pa_{sel_sub}")
                 
                 st.divider()
                 st.markdown("#### 📅 학기말 예측 설정 (중간고사 컷 입력)")
                 tmc = st.columns(3)
-                d["term_mid_cuts"]["1"] = tmc[0].number_input("중간 1컷", value=float(d["term_mid_cuts"]["1"]), key=f"tm1_{sel_sub}")
-                d["term_mid_cuts"]["2"] = tmc[1].number_input("중간 2컷", value=float(d["term_mid_cuts"]["2"]), key=f"tm2_{sel_sub}")
-                d["term_mid_cuts"]["3"] = tmc[2].number_input("중간 3컷", value=float(d["term_mid_cuts"]["3"]), key=f"tm3_{sel_sub}")
+                d["term_mid_cuts"]["1"] = tmc[0].number_input("중간 1컷", value=float(d["term_mid_cuts"]["1"]), step=0.1, key=f"tm1_{sel_sub}")
+                d["term_mid_cuts"]["2"] = tmc[1].number_input("중간 2컷", value=float(d["term_mid_cuts"]["2"]), step=0.1, key=f"tm2_{sel_sub}")
+                d["term_mid_cuts"]["3"] = tmc[2].number_input("중간 3컷", value=float(d["term_mid_cuts"]["3"]), step=0.1, key=f"tm3_{sel_sub}")
                 
-                st.caption("등급별 변동 보정치 (컷에 더해짐)")
+                st.caption("등급별 변동 보정치 (음수 가능)")
                 tadj = st.columns(3)
-                d["term_adj"]["1"] = tadj[0].number_input("1컷 보정", value=float(d["term_adj"]["1"]), key=f"ta1_{sel_sub}")
-                d["term_adj"]["2"] = tadj[1].number_input("2컷 보정", value=float(d["term_adj"]["2"]), key=f"ta2_{sel_sub}")
-                d["term_adj"]["3"] = tadj[2].number_input("3컷 보정", value=float(d["term_adj"]["3"]), key=f"ta3_{sel_sub}")
+                d["term_adj"]["1"] = tadj[0].number_input("1컷 보정", value=float(d["term_adj"]["1"]), step=0.1, key=f"ta1_{sel_sub}")
+                d["term_adj"]["2"] = tadj[1].number_input("2컷 보정", value=float(d["term_adj"]["2"]), step=0.1, key=f"ta2_{sel_sub}")
+                d["term_adj"]["3"] = tadj[2].number_input("3컷 보정", value=float(d["term_adj"]["3"]), step=0.1, key=f"ta3_{sel_sub}")
                 st.divider()
 
                 if hom:
                     st.info("😈 호머 보정치")
                     hc = st.columns(3)
                     d["homer_adj"] = {
-                        "1": hc[0].number_input("1컷+", float(d["homer_adj"]["1"]), key=f"ha1_{sel_sub}"), 
-                        "2": hc[1].number_input("2컷+", float(d["homer_adj"]["2"]), key=f"ha2_{sel_sub}"), 
-                        "3": hc[2].number_input("3컷+", float(d["homer_adj"]["3"]), key=f"ha3_{sel_sub}")
+                        "1": hc[0].number_input("1컷+", value=float(d["homer_adj"]["1"]), step=0.1, key=f"ha1_{sel_sub}"), 
+                        "2": hc[1].number_input("2컷+", value=float(d["homer_adj"]["2"]), step=0.1, key=f"ha2_{sel_sub}"), 
+                        "3": hc[2].number_input("3컷+", value=float(d["homer_adj"]["3"]), step=0.1, key=f"ha3_{sel_sub}")
                     }
                 
-                st.write("#### 1. 등급컷 기준")
+                st.write("#### 1. 등급컷 기준 (W: 가중치, 전: 전년도)")
                 c = st.columns(3)
                 d["cut_weights"] = {
-                    "1": c[0].number_input("1W", float(d["cut_weights"]["1"]), key=f"cw1_{sel_sub}"),
-                    "2": c[1].number_input("2W", float(d["cut_weights"]["2"]), key=f"cw2_{sel_sub}"),
-                    "3": c[2].number_input("3W", float(d["cut_weights"]["3"]), key=f"cw3_{sel_sub}")
+                    "1": c[0].number_input("1W", value=float(d["cut_weights"]["1"]), step=0.01, key=f"cw1_{sel_sub}"),
+                    "2": c[1].number_input("2W", value=float(d["cut_weights"]["2"]), step=0.01, key=f"cw2_{sel_sub}"),
+                    "3": c[2].number_input("3W", value=float(d["cut_weights"]["3"]), step=0.01, key=f"cw3_{sel_sub}")
                 }
                 cc = st.columns(3)
                 d["prev_cuts"] = {
-                    "1": cc[0].number_input("전1컷", float(d["prev_cuts"]["1"]), key=f"pc1_{sel_sub}"),
-                    "2": cc[1].number_input("전2컷", float(d["prev_cuts"]["2"]), key=f"pc2_{sel_sub}"),
-                    "3": cc[2].number_input("전3컷", float(d["prev_cuts"]["3"]), key=f"pc3_{sel_sub}")
+                    "1": cc[0].number_input("전1컷", value=float(d["prev_cuts"]["1"]), step=0.1, key=f"pc1_{sel_sub}"),
+                    "2": cc[1].number_input("전2컷", value=float(d["prev_cuts"]["2"]), step=0.1, key=f"pc2_{sel_sub}"),
+                    "3": cc[2].number_input("전3컷", value=float(d["prev_cuts"]["3"]), step=0.1, key=f"pc3_{sel_sub}")
                 }
                 
                 st.write("#### 2. 이번 시험 예상 평균")
                 gc = st.columns(5)
                 for i in range(1, 6): 
-                    d["dev_predict"][str(i)] = gc[i-1].number_input(f"{i}등급 평균", value=float(d["dev_predict"][str(i)]), key=f"dp_{i}_{sel_sub}")
+                    d["dev_predict"][str(i)] = gc[i-1].number_input(f"{i}등급 평균", value=float(d["dev_predict"][str(i)]), step=0.1, key=f"dp_{i}_{sel_sub}")
 
                 st.write("#### 3. 정답 및 배점")
                 for i in range(0, SUBJECT_CONFIG[sel_sub]["obj"], 4):
@@ -308,13 +307,15 @@ elif st.session_state.page == "main":
                         idx = i+j
                         if idx < SUBJECT_CONFIG[sel_sub]["obj"]:
                             d["obj_answers"][idx] = cols[j].selectbox(f"Q{idx+1}", [1,2,3,4,5], index=d["obj_answers"][idx]-1, key=f"ans_{sel_sub}_{idx}")
-                            d["obj_scores"][idx] = cols[j].number_input(f"Q{idx+1}점", 0.0, 10.0, float(d["obj_scores"][idx]), key=f"sco_{sel_sub}_{idx}")
+                            # [수정] 배점 제한 제거
+                            d["obj_scores"][idx] = cols[j].number_input(f"Q{idx+1}점", value=float(d["obj_scores"][idx]), step=0.1, key=f"sco_{sel_sub}_{idx}")
                 
                 if SUBJECT_CONFIG[sel_sub]["sub"] > 0:
                     st.write("#### 4. 서술형 설정")
                     for k in range(SUBJECT_CONFIG[sel_sub]["sub"]):
                         d["sub_criteria"][k] = st.text_input(f"서술{k+1}기준", d["sub_criteria"][k], key=f"scri_{sel_sub}_{k}")
-                        d["sub_max_scores"][k] = st.number_input(f"서술{k+1}만점", 0.0, 100.0, float(d["sub_max_scores"][k]), key=f"smax_{sel_sub}_{k}")
+                        # [수정] 만점 제한 제거
+                        d["sub_max_scores"][k] = st.number_input(f"서술{k+1}만점", value=float(d["sub_max_scores"][k]), step=0.1, key=f"smax_{sel_sub}_{k}")
                 
                 if st.form_submit_button("✅ 과목 설정 저장"):
                     supabase.table("subject_settings").upsert({"subject": sel_sub, "round": cur_round, "settings": d}).execute()
