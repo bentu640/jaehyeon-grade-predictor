@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from supabase import create_client, Client
 
 # ==========================================
-# 0. 기본 설정
+# 0. 시스템 환경 설정 (Supabase)
 # ==========================================
 st.set_page_config(page_title="재현고 내신 등급컷 예측 시스템", page_icon="📈")
 
@@ -66,9 +66,13 @@ def get_subject_setting(sub, round_num):
         res = supabase.table("subject_settings").select("settings").eq("subject", sub).eq("round", round_num).execute()
         if res.data: 
             s = res.data[0]['settings']
-            # 학기말 모드 데이터가 없을 경우 기본값 주입 (에러 방지)
+            # 학기말 모드 데이터 기본값 보정 (없으면 생성)
             if "term_mid_cuts" not in s: s["term_mid_cuts"] = {"1": 90.0, "2": 80.0, "3": 70.0}
-            if "term_adj" not in s: s["term_adj"] = 0.0
+            
+            # [수정] 보정치를 등급별 딕셔너리로 변경 (구버전 호환성 체크)
+            if "term_adj" not in s or isinstance(s["term_adj"], float):
+                s["term_adj"] = {"1": 0.0, "2": 0.0, "3": 0.0}
+            
             return s
     except: pass
     
@@ -83,7 +87,7 @@ def get_subject_setting(sub, round_num):
         "homer_mode": False, "homer_adj": {"1": 0.0, "2": 0.0, "3": 0.0},
         # 학기말 모드용
         "term_mid_cuts": {"1": 90.0, "2": 80.0, "3": 70.0},
-        "term_adj": 0.0
+        "term_adj": {"1": 0.0, "2": 0.0, "3": 0.0} # 등급별 보정치
     }
 
 # ----------------------------------
@@ -120,13 +124,16 @@ def get_prediction(sub_name, round_num):
 def get_term_prediction(sub_name, round_num, current_exam_cuts):
     d = get_subject_setting(sub_name, round_num)
     mid_cuts = d.get("term_mid_cuts", {"1": 90, "2": 80, "3": 70})
-    adj = d.get("term_adj", 0.0)
     
-    # 공식: (기말컷 * 0.3) + (중간컷 * 0.3) + 40(수행만점) + 보정치
+    # [수정] 등급별 보정치 가져오기
+    adj = d.get("term_adj", {"1": 0.0, "2": 0.0, "3": 0.0})
+    if isinstance(adj, float): adj = {"1": adj, "2": adj, "3": adj} # 구버전 호환
+
     term_cuts = {}
     for g in ["1", "2", "3"]:
         final_cut = current_exam_cuts[g]
-        val = (final_cut * 0.3) + (mid_cuts[g] * 0.3) + 40 + adj
+        # 공식: (기말컷 * 0.3) + (중간컷 * 0.3) + 40(수행만점) + 등급별 보정치
+        val = (final_cut * 0.3) + (mid_cuts[g] * 0.3) + 40 + adj[g]
         term_cuts[g] = round(val, 2)
     return term_cuts
 
@@ -198,7 +205,7 @@ if st.session_state.page == "login":
             s_n = st.text_input("닉네임"); s_p = st.text_input("비번", type="password")
             gr = st.session_state.signup_info["grade"]
             subs = GRADE_SUBJECTS.get(gr, [])
-            sel = st.multiselect("수강 과목", subs)
+            sel = st.multiselect("과목", subs)
             pg = {s: min(5, st.number_input(f"{s} 직전 등급 (1~5)", 1, 5, 3, key=f"p_{s}")) for s in sel}
             if st.button("가입"):
                 if not supabase: st.error("DB 연결 실패"); st.stop()
@@ -252,7 +259,7 @@ elif st.session_state.page == "main":
         t1, t2, t3 = st.tabs(["과목 설정", "시스템 설정", "데이터 추출"])
         
         with t1:
-            sel_sub = st.selectbox("과목", list(SUBJECT_CONFIG.keys()))
+            sel_sub = st.selectbox("과목 선택", list(SUBJECT_CONFIG.keys()))
             d = get_subject_setting(sel_sub, cur_round)
             st.write(f"### {cur_round}회차 {sel_sub} 설정")
             c1, c2 = st.columns(2)
@@ -264,14 +271,19 @@ elif st.session_state.page == "main":
                 d["homer_mode"] = hom
                 d["prev_avg"] = st.number_input("지난 평균", value=float(d["prev_avg"]))
                 
-                # 학기말 설정 (관리자가 미리 입력해둬야 함)
+                # [수정] 학기말 등급별 보정치 입력란 추가
                 st.divider()
                 st.markdown("#### 📅 학기말 예측 설정 (중간고사 컷 입력)")
-                tmc = st.columns(4)
+                tmc = st.columns(3)
                 d["term_mid_cuts"]["1"] = tmc[0].number_input("중간 1컷", value=float(d["term_mid_cuts"]["1"]), key=f"tm1")
                 d["term_mid_cuts"]["2"] = tmc[1].number_input("중간 2컷", value=float(d["term_mid_cuts"]["2"]), key=f"tm2")
                 d["term_mid_cuts"]["3"] = tmc[2].number_input("중간 3컷", value=float(d["term_mid_cuts"]["3"]), key=f"tm3")
-                d["term_adj"] = tmc[3].number_input("보정치", value=float(d["term_adj"]), key=f"tadj")
+                
+                st.caption("등급별 변동 보정치 (컷에 더해짐)")
+                tadj = st.columns(3)
+                d["term_adj"]["1"] = tadj[0].number_input("1컷 보정", value=float(d["term_adj"]["1"]), key=f"ta1")
+                d["term_adj"]["2"] = tadj[1].number_input("2컷 보정", value=float(d["term_adj"]["2"]), key=f"ta2")
+                d["term_adj"]["3"] = tadj[2].number_input("3컷 보정", value=float(d["term_adj"]["3"]), key=f"ta3")
                 st.divider()
 
                 if hom:
@@ -342,7 +354,9 @@ elif st.session_state.page == "main":
         
         for i, sub in enumerate(my_subs):
             with tabs[i]:
-                if sys_conf["exam_closed"]: st.info("⛔ 채점이 종료되었습니다. 성적표 탭에서 실제 등급을 입력하세요."); continue
+                if sys_conf["exam_closed"]:
+                    st.info("⛔ 채점이 종료되었습니다. 성적표 탭에서 실제 등급을 입력하세요."); continue
+
                 d = get_subject_setting(sub, cur_round)
                 if not d.get("active"): st.warning("비공개 상태"); continue
                 
@@ -358,6 +372,7 @@ elif st.session_state.page == "main":
                     if tied > 1: rank_msg = f"{rank}등 (동점 {tied}명) / {tot}명"
                     
                     st.info(f"🏆 점수: {row['total']}점 ({rank_msg})")
+                    
                     c1, c2 = st.columns(2)
                     c1.success(f"📊 실시간 컷\n1등급: {raw['1']}\n2등급: {raw['2']}\n3등급: {raw['3']}")
                     if is_h: c2.error(f"😈 호머 컷\n1등급: {homer['1']}\n2등급: {homer['2']}\n3등급: {homer['3']}")
@@ -392,6 +407,7 @@ elif st.session_state.page == "main":
                             
                             t_rank, t_tied, t_tot = get_my_term_rank(sub, my_term_score, cur_round)
                             t_rank_msg = f"{t_rank}등 / {t_tot}명"
+                            if t_tied > 1: t_rank_msg = f"{t_rank}등 (동점 {t_tied}명) / {t_tot}명"
                             
                             if my_term_score >= term_cuts['1']: t_grade = "1등급"
                             elif my_term_score >= term_cuts['2']: t_grade = "2등급"
@@ -425,7 +441,7 @@ elif st.session_state.page == "main":
                             op = sum(d["obj_scores"][x] for x, m in enumerate(marks) if m==d["obj_answers"][x])
                             supabase.table("submissions").upsert({"username":user, "subject":sub, "round":cur_round, "total":op+sum(sub_vals), "prev_grade":st.session_state.prev_grades[sub], "marks":marks, "sub_vals":sub_vals}).execute()
                             st.session_state[f"ed_{sub}"] = False; st.rerun()
-        
+
         with tabs[-1]:
             st.header("📋 종합 성적표")
             view_round = st.selectbox("회차 선택", range(cur_round, 0, -1))
